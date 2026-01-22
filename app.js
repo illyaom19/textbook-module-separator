@@ -127,7 +127,18 @@ const detectModulesFromPdf = async () => {
     const loadingTask = window.pdfjsLib.getDocument({ data: loadedPdfBytes });
     const pdf = await loadingTask.promise;
     const hits = [];
-    const headingPattern = /^(module|unit|chapter)\s+(\d+)\b[:\-–]?\s*(.*)$/i;
+    const headingPattern =
+      /^(module|unit|chapter|chap\.?)\s+(\d+)\b[:\-–]?\s*(.*)$/i;
+    const isLikelyTitle = (text) => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        return false;
+      }
+      if (/^\d+$/.test(trimmed)) {
+        return false;
+      }
+      return !/^page\s*\d+$/i.test(trimmed);
+    };
 
     for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
       const page = await pdf.getPage(pageIndex);
@@ -139,10 +150,18 @@ const detectModulesFromPdf = async () => {
       const maxY = Math.max(...lines.map((line) => line.y));
       const topLines = lines.filter((line) => line.y >= maxY - 60);
 
-      for (const line of topLines) {
+      for (let lineIndex = 0; lineIndex < topLines.length; lineIndex += 1) {
+        const line = topLines[lineIndex];
         const match = line.text.match(headingPattern);
         if (match) {
-          const label = match[0];
+          const trailingText = match[3] ? match[3].trim() : "";
+          let label = match[0];
+          if (!trailingText && /^chap\.?$/i.test(match[1])) {
+            const nextLine = topLines[lineIndex + 1];
+            if (nextLine && isLikelyTitle(nextLine.text)) {
+              label = `${match[0]} ${nextLine.text.trim()}`;
+            }
+          }
           hits.push({
             name: sanitizeModuleName(label, hits.length + 1),
             start: pageIndex,
