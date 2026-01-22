@@ -59,8 +59,15 @@
             id="moduleInput"
             placeholder="Module 1 | 1-40\nModule 2 | 41-70"
           ></textarea>
-          <div class="hint">Leave blank to auto-split every 25 pages.</div>
-          <button id="processBtn" class="primary">Generate modules</button>
+          <div class="hint">
+            Leave blank to auto-split every 25 pages, or detect modules from
+            headings inside the PDF.
+          </div>
+          <div class="button-row">
+            <button id="detectBtn" class="secondary">Detect modules</button>
+            <button id="processBtn" class="primary">Generate modules</button>
+          </div>
+          <p class="hint" id="detectStatus"></p>
         </section>
 
         <section class="panel output">
@@ -79,6 +86,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
