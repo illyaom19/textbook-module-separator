@@ -64,10 +64,19 @@
             headings inside the PDF.
           </div>
           <div class="button-row">
-            <button id="detectBtn" class="secondary">Detect modules</button>
-            <button id="processBtn" class="primary">Generate modules</button>
+            <button id="detectBtn" class="btn btn--secondary">Detect modules</button>
+            <button id="processBtn" class="btn btn--primary">Generate modules</button>
           </div>
-          <p class="hint" id="detectStatus"></p>
+          <div class="status-panel" id="autoProgress" hidden>
+            <div class="status-row">
+              <p class="status-text" id="autoProgressText">
+                Autogenerating module ranges...
+              </p>
+              <span class="status-meta" id="autoProgressValue">0%</span>
+            </div>
+            <progress id="autoProgressBar" max="100" value="0"></progress>
+          </div>
+          <p class="status-text" id="detectStatus"></p>
         </section>
 
         <section class="panel output">
