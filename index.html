@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Textbook Module Separator</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">PDF WORKFLOW</p>
+          <h1>Textbook Module Separator</h1>
+          <p class="subhead">
+            Upload a textbook PDF, define your module ranges, and instantly get cleanly
+            separated modules. Any module longer than 25 pages is automatically split into
+            multiple parts.
+          </p>
+        </div>
+        <div class="hero-card">
+          <div class="metric">
+            <span>Max pages per part</span>
+            <strong>25</strong>
+          </div>
+          <div class="metric">
+            <span>Output type</span>
+            <strong>PDF</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="grid">
+        <section class="panel">
+          <h2>1. Upload textbook</h2>
+          <label class="dropzone" for="pdfInput">
+            <input id="pdfInput" type="file" accept="application/pdf" />
+            <div>
+              <p class="dropzone-title">Drop your PDF here</p>
+              <p class="dropzone-subtitle">or click to browse files</p>
+            </div>
+          </label>
+          <div class="file-meta" id="fileMeta">
+            <p>No file selected.</p>
+          </div>
+          <div class="divider"></div>
+          <h2>2. Define modules</h2>
+          <p class="help">
+            Enter one module per line in the format:
+            <code>Module Name | start-end</code>
+          </p>
+          <textarea
+            id="moduleInput"
+            placeholder="Module 1 | 1-40\nModule 2 | 41-70"
+          ></textarea>
+          <div class="hint">Leave blank to auto-split every 25 pages.</div>
+          <button id="processBtn" class="primary">Generate modules</button>
+        </section>
+
+        <section class="panel output">
+          <div class="output-header">
+            <div>
+              <h2>3. Download outputs</h2>
+              <p class="help">Each module (or part) is ready as its own PDF.</p>
+            </div>
+            <span id="pageCount" class="pill">Pages: --</span>
+          </div>
+          <ul id="outputList" class="output-list">
+            <li class="empty">No modules generated yet.</li>
+          </ul>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
