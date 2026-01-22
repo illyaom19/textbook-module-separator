@@ -129,6 +129,10 @@ const detectModulesFromPdf = async () => {
     const hits = [];
     const headingPattern =
       /^(module|unit|chapter|chap\.?)\s+(\d+)\b[:\-–]?\s*(.*)$/i;
+    const normalizeHeadingType = (type) => {
+      const normalized = type.toLowerCase();
+      return normalized.startsWith("chap") ? "chapter" : normalized;
+    };
     const isLikelyTitle = (text) => {
       const trimmed = text.trim();
       if (!trimmed) {
@@ -139,6 +143,8 @@ const detectModulesFromPdf = async () => {
       }
       return !/^page\s*\d+$/i.test(trimmed);
     };
+
+    const seenHeadingKeys = new Map();
 
     for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
       const page = await pdf.getPage(pageIndex);
@@ -162,10 +168,22 @@ const detectModulesFromPdf = async () => {
               label = `${match[0]} ${nextLine.text.trim()}`;
             }
           }
+          const headingKey = `${normalizeHeadingType(match[1])}-${match[2]}`;
+          if (seenHeadingKeys.has(headingKey)) {
+            const existingIndex = seenHeadingKeys.get(headingKey);
+            if (label.length > hits[existingIndex].name.length) {
+              hits[existingIndex].name = sanitizeModuleName(
+                label,
+                existingIndex + 1
+              );
+            }
+            break;
+          }
           hits.push({
             name: sanitizeModuleName(label, hits.length + 1),
             start: pageIndex,
           });
+          seenHeadingKeys.set(headingKey, hits.length - 1);
           break;
         }
       }
