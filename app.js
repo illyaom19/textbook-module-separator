@@ -2,12 +2,20 @@ const pdfInput = document.getElementById("pdfInput");
 const fileMeta = document.getElementById("fileMeta");
 const moduleInput = document.getElementById("moduleInput");
 const processBtn = document.getElementById("processBtn");
+const detectBtn = document.getElementById("detectBtn");
+const detectStatus = document.getElementById("detectStatus");
 const outputList = document.getElementById("outputList");
 const pageCountBadge = document.getElementById("pageCount");
 
 const MAX_PART_PAGES = 25;
 let loadedPdfBytes = null;
 let totalPages = 0;
+let detectedModules = null;
+
+if (window.pdfjsLib) {
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
 
 const updateFileMeta = (file) => {
   if (!file) {
@@ -49,6 +57,11 @@ const parseModuleLines = (lines) => {
   return modules;
 };
 
+const sanitizeModuleName = (label, fallbackIndex) => {
+  const clean = label.replace(/\s+/g, " ").trim();
+  return clean || `Module ${fallbackIndex}`;
+};
+
 const buildDefaultModules = (pageCount) => {
   const modules = [];
   let page = 1;
@@ -66,6 +79,105 @@ const buildDefaultModules = (pageCount) => {
   }
 
   return modules;
+};
+
+const buildLinesFromItems = (items) => {
+  const sorted = items
+    .map((item) => ({
+      text: item.str,
+      x: item.transform[4],
+      y: item.transform[5],
+    }))
+    .filter((item) => item.text && item.text.trim())
+    .sort((a, b) => b.y - a.y || a.x - b.x);
+
+  const lines = [];
+  sorted.forEach((item) => {
+    const existing = lines.find((line) => Math.abs(line.y - item.y) < 4);
+    if (existing) {
+      existing.text += ` ${item.text}`;
+    } else {
+      lines.push({ y: item.y, text: item.text });
+    }
+  });
+
+  return lines;
+};
+
+const detectModulesFromPdf = async () => {
+  if (!loadedPdfBytes) {
+    alert("Please upload a PDF first.");
+    return;
+  }
+
+  if (!window.pdfjsLib) {
+    alert("PDF text extraction is unavailable. Please try again later.");
+    return;
+  }
+
+  detectBtn.disabled = true;
+  processBtn.disabled = true;
+  detectStatus.textContent = "Scanning textbook for module headings...";
+
+  try {
+    const loadingTask = window.pdfjsLib.getDocument({ data: loadedPdfBytes });
+    const pdf = await loadingTask.promise;
+    const hits = [];
+    const headingPattern = /^(module|unit|chapter)\s+(\d+)\b[:\-–]?\s*(.*)$/i;
+
+    for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
+      const page = await pdf.getPage(pageIndex);
+      const textContent = await page.getTextContent();
+      const lines = buildLinesFromItems(textContent.items);
+      if (!lines.length) {
+        continue;
+      }
+      const maxY = Math.max(...lines.map((line) => line.y));
+      const topLines = lines.filter((line) => line.y >= maxY - 60);
+
+      for (const line of topLines) {
+        const match = line.text.match(headingPattern);
+        if (match) {
+          const label = match[0];
+          hits.push({
+            name: sanitizeModuleName(label, hits.length + 1),
+            start: pageIndex,
+          });
+          break;
+        }
+      }
+    }
+
+    if (!hits.length) {
+      detectedModules = null;
+      detectStatus.textContent =
+        "No module headings found. Try manual entry or auto-split.";
+      return;
+    }
+
+    hits.sort((a, b) => a.start - b.start);
+    const modules = hits.map((hit, index) => ({
+      name: hit.name,
+      start: hit.start,
+      end:
+        index < hits.length - 1
+          ? Math.max(hit.start, hits[index + 1].start - 1)
+          : totalPages,
+    }));
+
+    detectedModules = modules;
+    moduleInput.value = modules
+      .map((module) => `${module.name} | ${module.start}-${module.end}`)
+      .join("\n");
+    detectStatus.textContent = `Detected ${modules.length} modules from the PDF.`;
+  } catch (error) {
+    detectedModules = null;
+    detectStatus.textContent = "Unable to detect modules from this PDF.";
+    alert(error.message || "Something went wrong while scanning the PDF.");
+  } finally {
+    detectBtn.disabled = false;
+    processBtn.disabled = false;
+  }
 };
 
 const splitModuleIntoParts = (module) => {
@@ -123,6 +235,8 @@ const loadPdf = async (file) => {
   const pdfDoc = await PDFLib.PDFDocument.load(loadedPdfBytes);
   totalPages = pdfDoc.getPageCount();
   pageCountBadge.textContent = `Pages: ${totalPages}`;
+  detectedModules = null;
+  detectStatus.textContent = "";
 };
 
 const generateOutputs = async () => {
@@ -139,7 +253,7 @@ const generateOutputs = async () => {
     const rawLines = moduleInput.value.split("\n");
     let modules = rawLines.some((line) => line.trim())
       ? parseModuleLines(rawLines)
-      : buildDefaultModules(totalPages);
+      : detectedModules || buildDefaultModules(totalPages);
 
     modules = modules.flatMap(splitModuleIntoParts);
 
@@ -187,3 +301,4 @@ pdfInput.addEventListener("change", async (event) => {
 });
 
 processBtn.addEventListener("click", generateOutputs);
+detectBtn.addEventListener("click", detectModulesFromPdf);
