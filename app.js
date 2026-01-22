@@ -4,6 +4,7 @@ const moduleInput = document.getElementById("moduleInput");
 const processBtn = document.getElementById("processBtn");
 const detectBtn = document.getElementById("detectBtn");
 const detectStatus = document.getElementById("detectStatus");
+const includeProblemsToggle = document.getElementById("includeProblems");
 const autoProgress = document.getElementById("autoProgress");
 const autoProgressText = document.getElementById("autoProgressText");
 const autoProgressValue = document.getElementById("autoProgressValue");
@@ -121,30 +122,17 @@ const detectModulesFromPdf = async () => {
 
   detectBtn.disabled = true;
   processBtn.disabled = true;
-  detectStatus.textContent = "Scanning textbook for module headings...";
+  detectStatus.textContent = "Scanning textbook headers for chapters...";
 
   try {
     const loadingTask = window.pdfjsLib.getDocument({ data: loadedPdfBytes });
     const pdf = await loadingTask.promise;
     const hits = [];
-    const headingPattern =
-      /^(module|unit|chapter|chap\.?)\s+(\d+)\b[:\-–]?\s*(.*)$/i;
-    const normalizeHeadingType = (type) => {
-      const normalized = type.toLowerCase();
-      return normalized.startsWith("chap") ? "chapter" : normalized;
-    };
-    const isLikelyTitle = (text) => {
-      const trimmed = text.trim();
-      if (!trimmed) {
-        return false;
-      }
-      if (/^\d+$/.test(trimmed)) {
-        return false;
-      }
-      return !/^page\s*\d+$/i.test(trimmed);
-    };
-
-    const seenHeadingKeys = new Map();
+    const includeProblems = includeProblemsToggle?.checked ?? true;
+    const chapterPattern = /chap\./i;
+    const problemsPattern = /problems?/i;
+    let lastChapterKey = null;
+    let problemsStartPage = null;
 
     for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
       const page = await pdf.getPage(pageIndex);
@@ -156,35 +144,28 @@ const detectModulesFromPdf = async () => {
       const maxY = Math.max(...lines.map((line) => line.y));
       const topLines = lines.filter((line) => line.y >= maxY - 60);
 
-      for (let lineIndex = 0; lineIndex < topLines.length; lineIndex += 1) {
-        const line = topLines[lineIndex];
-        const match = line.text.match(headingPattern);
-        if (match) {
-          const trailingText = match[3] ? match[3].trim() : "";
-          let label = match[0];
-          if (!trailingText && /^chap\.?$/i.test(match[1])) {
-            const nextLine = topLines[lineIndex + 1];
-            if (nextLine && isLikelyTitle(nextLine.text)) {
-              label = `${match[0]} ${nextLine.text.trim()}`;
-            }
-          }
-          const headingKey = `${normalizeHeadingType(match[1])}-${match[2]}`;
-          if (seenHeadingKeys.has(headingKey)) {
-            const existingIndex = seenHeadingKeys.get(headingKey);
-            if (label.length > hits[existingIndex].name.length) {
-              hits[existingIndex].name = sanitizeModuleName(
-                label,
-                existingIndex + 1
-              );
-            }
-            break;
-          }
+      if (!includeProblems) {
+        const problemsLine = topLines.find((line) =>
+          problemsPattern.test(line.text)
+        );
+        if (problemsLine) {
+          problemsStartPage = pageIndex;
+          break;
+        }
+      }
+
+      const chapterLine = topLines.find((line) =>
+        chapterPattern.test(line.text)
+      );
+      if (chapterLine) {
+        const label = chapterLine.text.trim();
+        const chapterKey = label.toLowerCase();
+        if (chapterKey !== lastChapterKey) {
           hits.push({
             name: sanitizeModuleName(label, hits.length + 1),
             start: pageIndex,
           });
-          seenHeadingKeys.set(headingKey, hits.length - 1);
-          break;
+          lastChapterKey = chapterKey;
         }
       }
     }
@@ -192,25 +173,33 @@ const detectModulesFromPdf = async () => {
     if (!hits.length) {
       detectedModules = null;
       detectStatus.textContent =
-        "No module headings found. Try manual entry or auto-split.";
+        "No chapter headers found. Try manual entry or auto-split.";
       return;
     }
 
     hits.sort((a, b) => a.start - b.start);
+    const finalPage =
+      !includeProblems && problemsStartPage
+        ? Math.max(1, problemsStartPage - 1)
+        : totalPages;
     const modules = hits.map((hit, index) => ({
       name: hit.name,
       start: hit.start,
       end:
         index < hits.length - 1
           ? Math.max(hit.start, hits[index + 1].start - 1)
-          : totalPages,
+          : finalPage,
     }));
 
     detectedModules = modules;
     moduleInput.value = modules
       .map((module) => `${module.name} | ${module.start}-${module.end}`)
       .join("\n");
-    detectStatus.textContent = `Detected ${modules.length} modules from the PDF.`;
+    const problemsNote =
+      !includeProblems && problemsStartPage
+        ? " (stopped before Problems chapters)"
+        : "";
+    detectStatus.textContent = `Detected ${modules.length} chapters from the PDF${problemsNote}.`;
   } catch (error) {
     detectedModules = null;
     detectStatus.textContent = "Unable to detect modules from this PDF.";
